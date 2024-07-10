@@ -15,14 +15,12 @@ func main() {
 	// Set up a file server handler
 	fileServer := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
 
-	// Set up the serve mux and wrap the file server with the middleware
+	// Set up the serve mux and add handlers for the GET methods only
 	mux := http.NewServeMux()
-	mux.Handle("/healthz", http.HandlerFunc(handlerReadiness))
+	mux.HandleFunc("/api/healthz", handlerReadiness)
+	mux.HandleFunc("/admin/metrics", apiCfg.handlerMetrics)
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(fileServer))
-	mux.HandleFunc("/metrics", apiCfg.handlerMetrics)
-	mux.HandleFunc("/reset", apiCfg.handlerReset)
-
-	// Add `mux.Handle` for `/metrics` and `/reset`
+	mux.HandleFunc("/api/reset", apiCfg.handlerReset)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
