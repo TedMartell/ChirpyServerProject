@@ -21,6 +21,7 @@ func main() {
 	mux.HandleFunc("/admin/metrics", apiCfg.handlerMetrics)
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(fileServer))
 	mux.HandleFunc("/api/reset", apiCfg.handlerReset)
+	mux.HandleFunc("/api/validate_chirp", handlerValidatePost)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
