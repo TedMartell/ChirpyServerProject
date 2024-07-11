@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -63,46 +62,35 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("fileserverHits has been reset to 0"))
 }
 
-func handlerValidatePost(w http.ResponseWriter, r *http.Request) {
-	// Check for allowed method
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed) // 405 status code
-		return
-	}
-
-	type parameters struct {
+func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
+	// Decode the request body to get the 'Body' parameter.
+	var params struct {
 		Body string `json:"body"`
 	}
-
-	type errorResp struct {
-		Error string `json:"error"`
-	}
-
-	type validResp struct {
-		Valid bool `json:"valid"`
-	}
-
-	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
+	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
-		log.Printf("Error decoding parameters: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		errResponse, _ := json.Marshal(errorResp{Error: "Something went wrong"})
-		w.Write(errResponse)
+		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
+	defer r.Body.Close()
 
-	// Check the length of the chirp
+	// Check if the body length exceeds 140 characters.
 	if len(params.Body) > 140 {
-		log.Printf("Chirp is too long")
-		w.WriteHeader(http.StatusBadRequest) //status code 400
-		errResponse, _ := json.Marshal(errorResp{Error: "Chirp is too long"})
-		w.Write(errResponse)
+		respondWithError(w, http.StatusBadRequest, "Body cannot exceed 140 characters")
 		return
 	}
 
-	w.WriteHeader(http.StatusOK) // status code 200
-	response, _ := json.Marshal(validResp{Valid: true})
-	w.Write(response)
+	// Clean the body content to replace bad words.
+	cleanedBody := cleanBody(params.Body)
+
+	// Prepare the response payload.
+	responsePayload := map[string]string{
+		"cleaned_body": cleanedBody,
+	}
+
+	// Respond with the cleaned body.
+	err = respondWithJSON(w, http.StatusOK, responsePayload)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to encode response")
+	}
 }
