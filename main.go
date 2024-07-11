@@ -3,14 +3,26 @@ package main
 import (
 	"log"
 	"net/http"
+
+	"github.com/TedMartell/ChirpyServerProject/internal/database"
 )
+
+// Add a reference to your DB in apiConfig
 
 func main() {
 	const filepathRoot = "."
 	const port = "8080"
 
-	// Initialize apiConfig
-	apiCfg := &apiConfig{}
+	// Initialize the database
+	db, err := database.NewDB("database.json")
+	if err != nil {
+		log.Fatalf("Failed to initialize the database: %v", err)
+	}
+
+	// Initialize apiConfig with the database
+	apiCfg := &apiConfig{
+		db: db,
+	}
 
 	// Set up a file server handler
 	fileServer := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
@@ -21,7 +33,7 @@ func main() {
 	mux.HandleFunc("/admin/metrics", apiCfg.handlerMetrics)
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(fileServer))
 	mux.HandleFunc("/api/reset", apiCfg.handlerReset)
-	mux.HandleFunc("/api/validate_chirp", handlerValidateChirp)
+	mux.HandleFunc("/api/chirps", apiCfg.handlerChirps)
 
 	srv := &http.Server{
 		Addr:    ":" + port,

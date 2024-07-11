@@ -3,11 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+
+	"github.com/TedMartell/ChirpyServerProject/internal/database"
 )
 
 type apiConfig struct {
 	fileserverHits int
+	db             *database.DB
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -62,35 +66,68 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("fileserverHits has been reset to 0"))
 }
 
-func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
-	// Decode the request body to get the 'Body' parameter.
-	var params struct {
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	chirps, err := cfg.db.GetChirps()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to retrieve chirps")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(chirps)
+}
+
+func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
 		Body string `json:"body"`
 	}
-	err := json.NewDecoder(r.Body).Decode(&params)
-	if err != nil {
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v", err)
 		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 	defer r.Body.Close()
 
-	// Check if the body length exceeds 140 characters.
-	if len(params.Body) > 140 {
+	if len(req.Body) > 140 {
+		log.Printf("Body exceeds 140 characters: %d", len(req.Body))
 		respondWithError(w, http.StatusBadRequest, "Body cannot exceed 140 characters")
 		return
 	}
 
-	// Clean the body content to replace bad words.
-	cleanedBody := cleanBody(params.Body)
+	// Clean the body content
+	cleanedBody := cleanBody(req.Body)
+	log.Printf("Cleaned body: %s", cleanedBody)
 
-	// Prepare the response payload.
-	responsePayload := map[string]string{
-		"cleaned_body": cleanedBody,
+	chirp, err := cfg.db.CreateChirp(cleanedBody)
+	if err != nil {
+		log.Printf("Error creating chirp: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to create chirp")
+		return
 	}
 
-	// Respond with the cleaned body.
-	err = respondWithJSON(w, http.StatusOK, responsePayload)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to encode response")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(chirp); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		cfg.handlerCreateChirp(w, r)
+	} else if r.Method == http.MethodGet {
+		cfg.handlerGetChirps(w, r)
+	} else {
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
