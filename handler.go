@@ -5,9 +5,17 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+
+	"github.com/gorilla/mux"
 
 	"github.com/TedMartell/ChirpyServerProject/internal/database"
 )
+
+type Chirp struct {
+	ID   int    `json:"id"`
+	Body string `json:"body"`
+}
 
 type apiConfig struct {
 	fileserverHits int
@@ -122,12 +130,61 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		cfg.handlerCreateChirp(w, r)
-	} else if r.Method == http.MethodGet {
-		cfg.handlerGetChirps(w, r)
-	} else {
+func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r) // corrected from mutex.Vars to mux.Vars
+	chirpIDStr := vars["chirpID"]
+
+	chirpID, err := strconv.Atoi(chirpIDStr)
+	if err != nil {
+		http.Error(w, "Invalid chirpID", http.StatusBadRequest)
+		return
+	}
+
+	chirp, err := cfg.db.GetChirpByID(chirpID)
+	if err != nil {
+		if err.Error() == "chirp not found" {
+			http.Error(w, "Chirp not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Error retrieving chirp: %v", err)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(chirp)
+	if err != nil {
+		http.Error(w, "Failed to marshal chirp into JSON", http.StatusInternalServerError)
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v", err)
+		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	defer r.Body.Close()
+
+	user, err := cfg.db.CreateUser(req.Email)
+	if err != nil {
+		log.Printf("Error creating user: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to create user")
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(user); err != nil {
+		log.Printf("Error encoding response: %v", err)
 	}
 }

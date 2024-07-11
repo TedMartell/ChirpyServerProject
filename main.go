@@ -1,13 +1,15 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/TedMartell/ChirpyServerProject/internal/database"
+	"github.com/gorilla/mux"
 )
-
-// Add a reference to your DB in apiConfig
 
 func main() {
 	const filepathRoot = "."
@@ -27,17 +29,36 @@ func main() {
 	// Set up a file server handler
 	fileServer := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
 
-	// Set up the serve mux and add handlers for the GET methods only
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/healthz", handlerReadiness)
-	mux.HandleFunc("/admin/metrics", apiCfg.handlerMetrics)
-	mux.Handle("/app/", apiCfg.middlewareMetricsInc(fileServer))
-	mux.HandleFunc("/api/reset", apiCfg.handlerReset)
-	mux.HandleFunc("/api/chirps", apiCfg.handlerChirps)
+	// Create a new router
+	r := mux.NewRouter()
 
+	// Define routes
+	r.HandleFunc("/api/healthz", handlerReadiness).Methods("GET")
+	r.HandleFunc("/admin/metrics", apiCfg.handlerMetrics).Methods("GET")
+	r.PathPrefix("/app/").Handler(apiCfg.middlewareMetricsInc(fileServer))
+	r.HandleFunc("/api/reset", apiCfg.handlerReset).Methods("POST")
+	r.HandleFunc("/api/chirps", apiCfg.handlerCreateChirp).Methods("POST")
+	r.HandleFunc("/api/chirps", apiCfg.handlerGetChirps).Methods("GET")
+	r.HandleFunc("/api/chirps/{chirpID}", apiCfg.handlerGetChirpByID).Methods("GET")
+	r.HandleFunc("/api/users", apiCfg.handlerCreateUser).Methods("POST")
+
+	// Start the server
 	srv := &http.Server{
 		Addr:    ":" + port,
-		Handler: mux,
+		Handler: r,
+	}
+
+	dbg := flag.Bool("debug", false, "Enable debug mode")
+	flag.Parse()
+
+	if *dbg {
+		// Try to delete the file and handle any potential errors
+		err := os.Remove("./database.json") // Adjust path for Unix-like systems
+		if err != nil {
+			fmt.Println("Error deleting database:", err)
+		} else {
+			fmt.Println("Database deleted successfully.")
+		}
 	}
 
 	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)

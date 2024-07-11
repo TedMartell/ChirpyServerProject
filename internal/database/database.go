@@ -1,7 +1,9 @@
 package database
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"sort"
 	"sync"
@@ -10,6 +12,7 @@ import (
 type DB struct {
 	path  string
 	mutex *sync.RWMutex
+	conn  *sql.DB
 }
 
 // Define the Chirp structure
@@ -17,9 +20,14 @@ type Chirp struct {
 	ID   int    `json:"id"`
 	Body string `json:"body"`
 }
+type User struct {
+	ID    int    `json:"id"`
+	Email string `json:"email"`
+}
 
 type DBStructure struct {
 	Chirps map[int]Chirp `json:"chirps"`
+	Users  map[int]User  `json:"users"`
 }
 
 // NewDB creates a new database connection
@@ -173,4 +181,68 @@ func (db *DB) writeDB(dbStructure DBStructure) error {
 	}
 
 	return nil
+}
+
+// Implement the GetChirpByID function
+func (db *DB) GetChirpByID(id int) (Chirp, error) {
+	// Step 1: Lock the database for reading
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	// Step 2: Load the current state of the database
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return Chirp{}, err
+	}
+
+	// Step 3: Look for the chirp with the given ID
+	chirp, exists := dbStructure.Chirps[id]
+	if !exists {
+		return Chirp{}, errors.New("chirp not found")
+	}
+
+	return chirp, nil
+}
+
+// CreateUser creates a new USER!!! and saves it to disk
+func (db *DB) CreateUser(email string) (User, error) {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	data, err := os.ReadFile(db.path)
+	if err != nil && !os.IsNotExist(err) {
+		return User{}, err
+	}
+
+	var dbStructure DBStructure
+
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &dbStructure); err != nil {
+			return User{}, err
+		}
+	}
+
+	// Initializes the Users map if it is nil
+	if dbStructure.Users == nil {
+		dbStructure.Users = make(map[int]User)
+	}
+
+	newID := len(dbStructure.Users) + 1
+	newUser := User{
+		ID:    newID,
+		Email: email,
+	}
+
+	dbStructure.Users[newID] = newUser
+
+	bytes, err := json.MarshalIndent(dbStructure, "", "  ")
+	if err != nil {
+		return User{}, err
+	}
+
+	if err := os.WriteFile(db.path, bytes, 0666); err != nil {
+		return User{}, err
+	}
+
+	return newUser, nil
 }
