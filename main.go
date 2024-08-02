@@ -2,64 +2,78 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/joho/godotenv"
+
 	"github.com/TedMartell/ChirpyServerProject/internal/database"
-	"github.com/gorilla/mux"
 )
+
+type apiConfig struct {
+	fileserverHits int
+	DB             *database.DB
+	jwtSecret      string
+}
 
 func main() {
 	const filepathRoot = "."
 	const port = "8080"
 
-	// Initialize the database
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatalf("Error loading `.env` file: %v", err)
+	}
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET environment variable is not set")
+	} else {
+		log.Printf("JWT_SECRET is set to: %s\n", jwtSecret)
+	}
+
 	db, err := database.NewDB("database.json")
 	if err != nil {
-		log.Fatalf("Failed to initialize the database: %v", err)
-	}
-
-	// Initialize apiConfig with the database
-	apiCfg := &apiConfig{
-		db: db,
-	}
-
-	// Set up a file server handler
-	fileServer := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
-
-	// Create a new router
-	r := mux.NewRouter()
-
-	// Define routes
-	r.HandleFunc("/api/healthz", handlerReadiness).Methods("GET")
-	r.HandleFunc("/admin/metrics", apiCfg.handlerMetrics).Methods("GET")
-	r.PathPrefix("/app/").Handler(apiCfg.middlewareMetricsInc(fileServer))
-	r.HandleFunc("/api/reset", apiCfg.handlerReset).Methods("POST")
-	r.HandleFunc("/api/chirps", apiCfg.handlerCreateChirp).Methods("POST")
-	r.HandleFunc("/api/chirps", apiCfg.handlerGetChirps).Methods("GET")
-	r.HandleFunc("/api/chirps/{chirpID}", apiCfg.handlerGetChirpByID).Methods("GET")
-	r.HandleFunc("/api/users", apiCfg.handlerCreateUser).Methods("POST")
-	r.HandleFunc("/api/login", apiCfg.handlerAuthorizePassword).Methods("POST")
-
-	// Start the server
-	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: r,
+		log.Fatal(err)
 	}
 
 	dbg := flag.Bool("debug", false, "Enable debug mode")
 	flag.Parse()
-
-	if *dbg {
-		// Try to delete the file and handle any potential errors
-		err := os.Remove("./database.json") // Adjust path for Unix-like systems
+	if dbg != nil && *dbg {
+		err := db.ResetDB()
 		if err != nil {
-			fmt.Println("Error deleting database:", err)
-		} else {
-			fmt.Println("Database deleted successfully.")
+			log.Fatal(err)
 		}
+	}
+
+	apiCfg := apiConfig{
+		fileserverHits: 0,
+		DB:             db,
+		jwtSecret:      jwtSecret,
+	}
+
+	mux := http.NewServeMux()
+	fsHandler := apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot))))
+	mux.Handle("/app/*", fsHandler)
+
+	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+	mux.HandleFunc("GET /api/reset", apiCfg.handlerReset)
+
+	mux.HandleFunc("POST /api/login", apiCfg.handlerLogin)
+
+	mux.HandleFunc("POST /api/users", apiCfg.handlerUsersCreate)
+	mux.HandleFunc("PUT /api/users", apiCfg.handlerUsersUpdate)
+
+	mux.HandleFunc("POST /api/chirps", apiCfg.handlerChirpsCreate)
+	mux.HandleFunc("GET /api/chirps", apiCfg.handlerChirpsRetrieve)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handlerChirpsGet)
+
+	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
+
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
 	}
 
 	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
