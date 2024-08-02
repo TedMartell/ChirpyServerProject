@@ -2,4 +2,7 @@ module github.com/TedMartell/ChirpyServerProject
 
 go 1.22.4
 
-require github.com/gorilla/mux v1.8.1
+require (
+	github.com/gorilla/mux v1.8.1
+	golang.org/x/crypto v0.25.0
+)

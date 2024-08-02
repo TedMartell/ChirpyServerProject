@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"sync"
@@ -21,8 +22,9 @@ type Chirp struct {
 	Body string `json:"body"`
 }
 type User struct {
-	ID    int    `json:"id"`
-	Email string `json:"email"`
+	ID       int    `json:"id"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type DBStructure struct {
@@ -205,7 +207,7 @@ func (db *DB) GetChirpByID(id int) (Chirp, error) {
 }
 
 // CreateUser creates a new USER!!! and saves it to disk
-func (db *DB) CreateUser(email string) (User, error) {
+func (db *DB) CreateUser(email string, password string) (User, error) {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
@@ -227,10 +229,18 @@ func (db *DB) CreateUser(email string) (User, error) {
 		dbStructure.Users = make(map[int]User)
 	}
 
+	// Check for existing email
+	for _, user := range dbStructure.Users {
+		if user.Email == email {
+			return User{}, fmt.Errorf("email already in use")
+		}
+	}
+
 	newID := len(dbStructure.Users) + 1
 	newUser := User{
-		ID:    newID,
-		Email: email,
+		ID:       newID,
+		Email:    email,
+		Password: password,
 	}
 
 	dbStructure.Users[newID] = newUser
@@ -245,4 +255,32 @@ func (db *DB) CreateUser(email string) (User, error) {
 	}
 
 	return newUser, nil
+}
+
+func (db *DB) GetUserByEmail(email string) (User, error) {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	data, err := os.ReadFile(db.path)
+	if err != nil && !os.IsNotExist(err) {
+		return User{}, err
+	}
+
+	var dbStructure DBStructure
+
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &dbStructure); err != nil {
+			return User{}, err
+		}
+	}
+
+	// Iterate through users to find a match
+	for _, user := range dbStructure.Users {
+		if user.Email == email {
+			return user, nil
+		}
+	}
+
+	// Return an error if user not found
+	return User{}, fmt.Errorf("user not found")
 }

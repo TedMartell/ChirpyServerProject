@@ -41,6 +41,7 @@ func main() {
 	r.HandleFunc("/api/chirps", apiCfg.handlerGetChirps).Methods("GET")
 	r.HandleFunc("/api/chirps/{chirpID}", apiCfg.handlerGetChirpByID).Methods("GET")
 	r.HandleFunc("/api/users", apiCfg.handlerCreateUser).Methods("POST")
+	r.HandleFunc("/api/login", apiCfg.handlerAuthorizePassword).Methods("POST")
 
 	// Start the server
 	srv := &http.Server{

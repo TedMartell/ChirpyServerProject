@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/gorilla/mux"
 
 	"github.com/TedMartell/ChirpyServerProject/internal/database"
@@ -166,7 +168,8 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -176,15 +179,84 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 	}
 	defer r.Body.Close()
 
-	user, err := cfg.db.CreateUser(req.Email)
+	// Hashing the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Error hashing password: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to hash password")
+		return
+	}
+
+	// Create user with hashed password
+	user, err := cfg.db.CreateUser(req.Email, string(hashedPassword))
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Failed to create user")
 		return
 	}
 
+	// Create response without the password
+	response := struct {
+		ID    int    `json:"id"`
+		Email string `json:"email"`
+	}{
+		ID:    user.ID,
+		Email: user.Email,
+	}
+
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(user); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+func (cfg *apiConfig) handlerAuthorizePassword(w http.ResponseWriter, r *http.Request) {
+	// Only allow POST method
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v", err)
+		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	defer r.Body.Close()
+
+	// Check if user exists
+	user, err := cfg.db.GetUserByEmail(req.Email)
+	if err != nil {
+		log.Printf("Error getting user: %v", err)
+		respondWithError(w, http.StatusUnauthorized, "Invalid email or password")
+		return
+	}
+
+	// Compare stored hashed password with provided password
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	if err != nil {
+		log.Printf("Invalid password for user: %s", req.Email)
+		respondWithError(w, http.StatusUnauthorized, "Invalid email or password")
+		return
+	}
+
+	// Create response without the password
+	response := struct {
+		ID    int    `json:"id"`
+		Email string `json:"email"`
+	}{
+		ID:    user.ID,
+		Email: user.Email,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
 }
