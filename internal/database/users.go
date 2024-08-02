@@ -1,11 +1,20 @@
 package database
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
+
+type RefreshToken struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
 
 type User struct {
-	ID             int    `json:"id"`
-	Email          string `json:"email"`
-	HashedPassword string `json:"hashed_password"`
+	ID             int          `json:"id"`
+	Email          string       `json:"email"`
+	HashedPassword string       `json:"hashed_password"`
+	RefreshToken   RefreshToken `json:"refresh_token"`
 }
 
 var ErrAlreadyExists = errors.New("already exists")
@@ -15,7 +24,7 @@ func (db *DB) CreateUser(email, hashedPassword string) (User, error) {
 		return User{}, ErrAlreadyExists
 	}
 
-	dbStructure, err := db.loadDB()
+	dbStructure, err := db.LoadDB()
 	if err != nil {
 		return User{}, err
 	}
@@ -37,7 +46,7 @@ func (db *DB) CreateUser(email, hashedPassword string) (User, error) {
 }
 
 func (db *DB) GetUser(id int) (User, error) {
-	dbStructure, err := db.loadDB()
+	dbStructure, err := db.LoadDB()
 	if err != nil {
 		return User{}, err
 	}
@@ -51,7 +60,7 @@ func (db *DB) GetUser(id int) (User, error) {
 }
 
 func (db *DB) GetUserByEmail(email string) (User, error) {
-	dbStructure, err := db.loadDB()
+	dbStructure, err := db.LoadDB()
 	if err != nil {
 		return User{}, err
 	}
@@ -66,7 +75,7 @@ func (db *DB) GetUserByEmail(email string) (User, error) {
 }
 
 func (db *DB) UpdateUser(id int, email, hashedPassword string) (User, error) {
-	dbStructure, err := db.loadDB()
+	dbStructure, err := db.LoadDB()
 	if err != nil {
 		return User{}, err
 	}
