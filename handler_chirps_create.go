@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/TedMartell/ChirpyServerProject/internal/auth"
 )
 
 type Chirp struct {
@@ -17,9 +20,31 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request
 		Body string `json:"body"`
 	}
 
+	// Extract the token from the request headers using your auth package.
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Missing or malformed token")
+		return
+	}
+
+	// Validate the token and extract the user ID using your auth package.
+	userIDStr, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token")
+		return
+	}
+
+	// Convert userID from string to integer
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Invalid user ID")
+		return
+	}
+
+	// Decode the request body.
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters")
 		return
@@ -31,18 +56,16 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	chirp, err := cfg.DB.CreateChirp(cleaned)
+	// Create the chirp with the author_id.
+	chirp, err := cfg.DB.CreateChirp(cleaned, userID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create chirp")
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, Chirp{
-		ID:   chirp.ID,
-		Body: chirp.Body,
-	})
+	// Include the author_id in the response using the database `Chirp` struct.
+	respondWithJSON(w, http.StatusCreated, chirp)
 }
-
 func validateChirp(body string) (string, error) {
 	const maxChirpLength = 140
 	if len(body) > maxChirpLength {
