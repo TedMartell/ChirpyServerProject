@@ -6,9 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/joho/godotenv"
-
 	"github.com/TedMartell/ChirpyServerProject/internal/database"
+	"github.com/joho/godotenv"
 )
 
 type apiConfig struct {
@@ -21,16 +20,11 @@ func main() {
 	const filepathRoot = "."
 	const port = "8080"
 
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatalf("Error loading `.env` file: %v", err)
-	}
+	godotenv.Load(".env")
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET environment variable is not set")
-	} else {
-		log.Printf("JWT_SECRET is set to: %s\n", jwtSecret)
 	}
 
 	db, err := database.NewDB("database.json")
@@ -60,9 +54,9 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 	mux.HandleFunc("GET /api/reset", apiCfg.handlerReset)
 
+	mux.HandleFunc("POST /api/revoke", apiCfg.handlerRevoke)
+	mux.HandleFunc("POST /api/refresh", apiCfg.handlerRefresh)
 	mux.HandleFunc("POST /api/login", apiCfg.handlerLogin)
-	mux.HandleFunc("/api/refresh", apiCfg.handlerRefreshTokens)
-	mux.HandleFunc("/api/revoke", apiCfg.handlerRevokeTokens)
 
 	mux.HandleFunc("POST /api/users", apiCfg.handlerUsersCreate)
 	mux.HandleFunc("PUT /api/users", apiCfg.handlerUsersUpdate)

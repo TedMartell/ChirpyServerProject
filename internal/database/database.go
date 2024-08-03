@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"sync"
-	"time"
 )
 
 var ErrNotExist = errors.New("resource does not exist")
@@ -16,8 +15,9 @@ type DB struct {
 }
 
 type DBStructure struct {
-	Chirps map[int]Chirp `json:"chirps"`
-	Users  map[int]User  `json:"users"`
+	Chirps        map[int]Chirp           `json:"chirps"`
+	Users         map[int]User            `json:"users"`
+	RefreshTokens map[string]RefreshToken `json:"refresh_tokens"`
 }
 
 func NewDB(path string) (*DB, error) {
@@ -31,8 +31,9 @@ func NewDB(path string) (*DB, error) {
 
 func (db *DB) createDB() error {
 	dbStructure := DBStructure{
-		Chirps: map[int]Chirp{},
-		Users:  map[int]User{},
+		Chirps:        map[int]Chirp{},
+		Users:         map[int]User{},
+		RefreshTokens: map[string]RefreshToken{},
 	}
 	return db.writeDB(dbStructure)
 }
@@ -53,7 +54,7 @@ func (db *DB) ResetDB() error {
 	return db.ensureDB()
 }
 
-func (db *DB) LoadDB() (DBStructure, error) {
+func (db *DB) loadDB() (DBStructure, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -84,46 +85,4 @@ func (db *DB) writeDB(dbStructure DBStructure) error {
 		return err
 	}
 	return nil
-}
-
-// SaveDB saves the current state of the database to the file
-func (db *DB) SaveDB(dbStructure DBStructure) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	data, err := json.Marshal(dbStructure)
-	if err != nil {
-		return err
-	}
-
-	err = os.WriteFile(db.path, data, 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// StoreRefreshToken stores the refresh token in the database with the associated user ID and expiration time.
-func (db *DB) StoreRefreshToken(userID int, refreshToken string, expiration time.Time) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	dbStructure, err := db.LoadDB()
-	if err != nil {
-		return err
-	}
-
-	user, exists := dbStructure.Users[userID]
-	if !exists {
-		return ErrNotExist
-	}
-
-	user.RefreshToken = RefreshToken{
-		Token:     refreshToken,
-		ExpiresAt: expiration,
-	}
-	dbStructure.Users[userID] = user
-
-	return db.writeDB(dbStructure)
 }

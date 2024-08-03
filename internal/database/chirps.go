@@ -6,7 +6,7 @@ type Chirp struct {
 }
 
 func (db *DB) CreateChirp(body string) (Chirp, error) {
-	dbStructure, err := db.LoadDB()
+	dbStructure, err := db.loadDB()
 	if err != nil {
 		return Chirp{}, err
 	}
@@ -27,7 +27,7 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 }
 
 func (db *DB) GetChirps() ([]Chirp, error) {
-	dbStructure, err := db.LoadDB()
+	dbStructure, err := db.loadDB()
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (db *DB) GetChirps() ([]Chirp, error) {
 }
 
 func (db *DB) GetChirp(id int) (Chirp, error) {
-	dbStructure, err := db.LoadDB()
+	dbStructure, err := db.loadDB()
 	if err != nil {
 		return Chirp{}, err
 	}

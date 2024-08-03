@@ -2,13 +2,7 @@ package database
 
 import (
 	"errors"
-	"time"
 )
-
-type RefreshToken struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
 
 type User struct {
 	ID             int          `json:"id"`
@@ -24,7 +18,7 @@ func (db *DB) CreateUser(email, hashedPassword string) (User, error) {
 		return User{}, ErrAlreadyExists
 	}
 
-	dbStructure, err := db.LoadDB()
+	dbStructure, err := db.loadDB()
 	if err != nil {
 		return User{}, err
 	}
@@ -46,7 +40,7 @@ func (db *DB) CreateUser(email, hashedPassword string) (User, error) {
 }
 
 func (db *DB) GetUser(id int) (User, error) {
-	dbStructure, err := db.LoadDB()
+	dbStructure, err := db.loadDB()
 	if err != nil {
 		return User{}, err
 	}
@@ -60,7 +54,7 @@ func (db *DB) GetUser(id int) (User, error) {
 }
 
 func (db *DB) GetUserByEmail(email string) (User, error) {
-	dbStructure, err := db.LoadDB()
+	dbStructure, err := db.loadDB()
 	if err != nil {
 		return User{}, err
 	}
@@ -75,7 +69,7 @@ func (db *DB) GetUserByEmail(email string) (User, error) {
 }
 
 func (db *DB) UpdateUser(id int, email, hashedPassword string) (User, error) {
-	dbStructure, err := db.LoadDB()
+	dbStructure, err := db.loadDB()
 	if err != nil {
 		return User{}, err
 	}

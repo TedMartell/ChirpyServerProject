@@ -8,18 +8,15 @@ import (
 	"github.com/TedMartell/ChirpyServerProject/internal/auth"
 )
 
-// Define a new response structure to include the refresh token
-type response struct {
-	User
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
-}
-
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Password         string `json:"password"`
-		Email            string `json:"email"`
-		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	type response struct {
+		User
+		Token        string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -30,7 +27,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := cfg.DB.GetUserByEmail(params.Email) // Adjust according to your database getting functions
+	user, err := cfg.DB.GetUserByEmail(params.Email)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't get user")
 		return
@@ -42,17 +39,13 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defaultExpiration := 60 * 60 // 1 hour for JWT tokens
-	if params.ExpiresInSeconds == 0 {
-		params.ExpiresInSeconds = defaultExpiration
-	} else if params.ExpiresInSeconds > defaultExpiration {
-		params.ExpiresInSeconds = defaultExpiration
-	}
-
-	// Generate the JWT token
-	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Duration(params.ExpiresInSeconds)*time.Second)
+	accessToken, err := auth.MakeJWT(
+		user.ID,
+		cfg.jwtSecret,
+		time.Hour,
+	)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create JWT")
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create access JWT")
 		return
 	}
 
@@ -62,23 +55,18 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set the refresh token expiration time (e.g., 60 days)
-	refreshTokenExpiration := time.Now().Add(60 * 24 * time.Hour)
-
-	// Store the refresh token in the database
-	err = cfg.DB.StoreRefreshToken(user.ID, refreshToken, refreshTokenExpiration)
+	err = cfg.DB.SaveRefreshToken(user.ID, refreshToken)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't store refresh token")
+		respondWithError(w, http.StatusInternalServerError, "Couldn't save refresh token")
 		return
 	}
 
-	// Respond with both the access token (JWT) and the refresh token
 	respondWithJSON(w, http.StatusOK, response{
 		User: User{
 			ID:    user.ID,
 			Email: user.Email,
 		},
-		Token:        token,
+		Token:        accessToken,
 		RefreshToken: refreshToken,
 	})
 }
