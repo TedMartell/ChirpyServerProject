@@ -27,6 +27,11 @@ func main() {
 		log.Fatal("JWT_SECRET environment variable is not set")
 	}
 
+	polkaKey := os.Getenv("POLKA_KEY")
+	if polkaKey == "" {
+		log.Fatal("POLKA_KEY environment variable is not set")
+	}
+
 	db, err := database.NewDB("database.json")
 	if err != nil {
 		log.Fatal(err)

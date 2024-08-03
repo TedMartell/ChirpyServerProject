@@ -4,11 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 
+	"github.com/TedMartell/ChirpyServerProject/internal/auth"
 	"github.com/TedMartell/ChirpyServerProject/internal/database"
 )
 
 func (cfg *apiConfig) handlerPolkaWebhooks(w http.ResponseWriter, r *http.Request) {
+
+	// Validate the API key
+	err1 := auth.ValidateAPI(r, os.Getenv("POLKA_KEY"))
+	if err1 != nil {
+		respondWithError(w, http.StatusUnauthorized, err1.Error())
+		return
+	}
 	// Define the webhook struct
 	type webhook struct {
 		Event string `json:"event"`
