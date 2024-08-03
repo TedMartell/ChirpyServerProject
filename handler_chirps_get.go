@@ -30,6 +30,7 @@ func (cfg *apiConfig) handlerChirpsGet(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Request) {
 	s := r.URL.Query().Get("author_id")
+	srt := r.URL.Query().Get("sort")
 
 	dbChirps, err := cfg.DB.GetChirps()
 	if err != nil {
@@ -38,39 +39,45 @@ func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Reque
 	}
 
 	chirps := []database.Chirp{}
+
+	// Collect all chirps first
+	for _, dbChirp := range dbChirps {
+		chirps = append(chirps, database.Chirp{
+			ID:       dbChirp.ID,
+			AuthorID: dbChirp.AuthorID,
+			Body:     dbChirp.Body,
+		})
+	}
+
+	// Filter based on author_id if provided
 	if s != "" {
-		// Convert author_id to integer
 		authorID, err := strconv.Atoi(s)
 		if err != nil {
 			respondWithError(w, http.StatusBadRequest, "Invalid author ID")
 			return
 		}
-
-		// Filter based on author_id
-		for _, dbChirp := range dbChirps {
-			if dbChirp.AuthorID == authorID {
-				chirps = append(chirps, database.Chirp{
-					ID:       dbChirp.ID,
-					AuthorID: dbChirp.AuthorID,
-					Body:     dbChirp.Body,
-				})
+		// Filter after collecting all chirps
+		filteredChirps := []database.Chirp{}
+		for _, chirp := range chirps {
+			if chirp.AuthorID == authorID {
+				filteredChirps = append(filteredChirps, chirp)
 			}
 		}
-	} else {
-		// Otherwise, include all chirps
-		for _, dbChirp := range dbChirps {
-			chirps = append(chirps, database.Chirp{
-				ID:       dbChirp.ID,
-				AuthorID: dbChirp.AuthorID,
-				Body:     dbChirp.Body,
-			})
-		}
+		chirps = filteredChirps
 	}
 
-	// Sort by ID in ascending order
-	sort.Slice(chirps, func(i, j int) bool {
-		return chirps[i].ID < chirps[j].ID
-	})
+	// Sort based on the sort parameter
+	if srt == "desc" {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[j].ID < chirps[i].ID
+		})
+	} else {
+		// Default to ascending if sort is "asc" or empty
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].ID < chirps[j].ID
+		})
+	}
 
+	// Respond with sorted chirps
 	respondWithJSON(w, http.StatusOK, chirps)
 }
