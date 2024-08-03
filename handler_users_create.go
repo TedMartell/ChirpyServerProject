@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/TedMartell/ChirpyServerProject/internal/auth"
@@ -21,7 +20,7 @@ func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request)
 		Email    string `json:"email"`
 	}
 	type response struct {
-		User
+		database.User
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -40,19 +39,15 @@ func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request)
 
 	user, err := cfg.DB.CreateUser(params.Email, hashedPassword)
 	if err != nil {
-		if errors.Is(err, database.ErrAlreadyExists) {
-			respondWithError(w, http.StatusConflict, "User already exists")
-			return
-		}
-
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create user")
 		return
 	}
 
 	respondWithJSON(w, http.StatusCreated, response{
-		User: User{
-			ID:    user.ID,
-			Email: user.Email,
+		User: database.User{
+			ID:          user.ID,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed, // Include this field in the response
 		},
 	})
 }

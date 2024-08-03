@@ -66,6 +66,7 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request
 	// Include the author_id in the response using the database `Chirp` struct.
 	respondWithJSON(w, http.StatusCreated, chirp)
 }
+
 func validateChirp(body string) (string, error) {
 	const maxChirpLength = 140
 	if len(body) > maxChirpLength {

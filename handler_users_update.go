@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/TedMartell/ChirpyServerProject/internal/auth"
+	"github.com/TedMartell/ChirpyServerProject/internal/database"
 )
 
 func (cfg *apiConfig) handlerUsersUpdate(w http.ResponseWriter, r *http.Request) {
@@ -14,7 +15,7 @@ func (cfg *apiConfig) handlerUsersUpdate(w http.ResponseWriter, r *http.Request)
 		Email    string `json:"email"`
 	}
 	type response struct {
-		User
+		database.User
 	}
 
 	token, err := auth.GetBearerToken(r.Header)
@@ -22,6 +23,7 @@ func (cfg *apiConfig) handlerUsersUpdate(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT")
 		return
 	}
+
 	subject, err := auth.ValidateJWT(token, cfg.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT")
@@ -48,16 +50,25 @@ func (cfg *apiConfig) handlerUsersUpdate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user, err := cfg.DB.UpdateUser(userIDInt, params.Email, hashedPassword)
+	// Fetch the existing user to get their current IsChirpyRed status
+	existingUser, err := cfg.DB.GetUser(userIDInt)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create user")
+		respondWithError(w, http.StatusInternalServerError, "Couldn't fetch user")
+		return
+	}
+
+	// Update the user with the new email and password while keeping IsChirpyRed status
+	user, err := cfg.DB.UpdateUser(userIDInt, params.Email, hashedPassword, existingUser.IsChirpyRed)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't update user")
 		return
 	}
 
 	respondWithJSON(w, http.StatusOK, response{
-		User: User{
-			ID:    user.ID,
-			Email: user.Email,
+		User: database.User{
+			ID:          user.ID,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed, // Ensure to include the ChirpyRed status
 		},
 	})
 }
